@@ -116,50 +116,63 @@ const WebcamBooth = ({ onCapture, dualMode }) => {
     }
   }, []);
 
-  // Boot: get permission + devices, then start feeds
+  // Manage camera streams based on dualMode without unnecessary teardown
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      try {
-        const tempStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-        tempStream.getTracks().forEach(t => t.stop());
-      } catch (err) {
-        if (!cancelled) setError('Camera access denied or unavailable. Please allow camera permission and retry.');
-        return;
-      }
-      if (cancelled) return;
 
+    const setupCameras = async () => {
+      if (error) return; // Don't try to setup if we're in an error state
+
+      // 1. Always ensure feed 0 is running
+      if (!streamsRef.current[0]) {
+        const firstStream = await startFeed(0, null, { facingMode: 'user' });
+        if (cancelled || !firstStream) return;
+      }
+
+      // 2. We now have permission, refresh devices
       const vids = await refreshDevices();
-      if (cancelled || vids.length === 0) return;
+      if (cancelled) return;
+      const feed0Id = streamsRef.current[0]?.getVideoTracks()[0]?.getSettings?.()?.deviceId;
 
-      // Assign distinct devices per feed when possible
-      const front = vids.find(v => v.label.toLowerCase().includes('front') || v.label.toLowerCase().includes('user')) || vids[0];
-      await startFeed(0, vids, { deviceId: front.deviceId });
-
-      if (feedCount === 2) {
-        let back = vids.find(v => v.label.toLowerCase().includes('back') || v.label.toLowerCase().includes('environment') || v.label.toLowerCase().includes('rear'));
-        if (!back && vids.length > 1) {
-          back = vids.find(v => v.deviceId !== front.deviceId);
+      // 3. Manage feed 1 based on dualMode
+      if (dualMode) {
+        if (!streamsRef.current[1]) {
+          let back = vids.find(v => v.label.toLowerCase().includes('back') || v.label.toLowerCase().includes('environment') || v.label.toLowerCase().includes('rear'));
+          if (!back && vids.length > 1) back = vids.find(v => v.deviceId !== feed0Id);
+          
+          if (back) {
+            await startFeed(1, null, { deviceId: back.deviceId });
+          } else if (vids.length <= 1) {
+            await startFeed(1, null, { cloneFromIndex: 0 });
+          } else {
+            await startFeed(1, null, { facingMode: 'environment' });
+          }
         }
-        
-        if (back) {
-          await startFeed(1, vids, { deviceId: back.deviceId });
-        } else if (vids.length === 1) {
-          // If there's only 1 camera on the device, clone it to avoid double usage errors
-          await startFeed(1, vids, { cloneFromIndex: 0 });
-        } else {
-          // Fallback to requesting the environment camera explicitly
-          await startFeed(1, vids, { facingMode: 'environment' });
+      } else {
+        if (streamsRef.current[1]) {
+          streamsRef.current[1].getTracks().forEach(t => t.stop());
+          streamsRef.current[1] = null;
+          setStreams(prev => { const n = [...prev]; n[1] = null; return n; });
+          if (videoRefs[1].current) videoRefs[1].current.srcObject = null;
+          setDeviceIds(prev => { const n = [...prev]; n[1] = null; return n; });
         }
       }
-    })();
+    };
+
+    setupCameras();
+
     return () => {
       cancelled = true;
+    };
+  }, [dualMode, refreshDevices, startFeed, error]);
+
+  // Unmount cleanup
+  useEffect(() => {
+    return () => {
       streamsRef.current.forEach((s) => s?.getTracks().forEach((t) => t.stop()));
       streamsRef.current = [null, null];
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [feedCount]);
+  }, []);
 
   const handleSelectDevice = (index, deviceId) => {
     setDeviceIds((prev) => { const n = [...prev]; n[index] = deviceId; return n; });
@@ -239,7 +252,7 @@ const WebcamBooth = ({ onCapture, dualMode }) => {
         <div style={{ fontSize: '3rem', marginBottom: 14 }}>📷</div>
         <h3 style={{ fontWeight: 700, marginBottom: 8 }}>Camera unavailable</h3>
         <p style={{ color: 'var(--text-dim)', fontSize: '0.9rem', maxWidth: 420, margin: '0 auto 20px' }}>{error}</p>
-        <button className="btn btn-primary" onClick={() => { setError(''); startFeed(0, devices, deviceIds[0]); }}>
+        <button className="btn btn-primary" onClick={() => setError('')}>
           Retry Camera
         </button>
       </div>
