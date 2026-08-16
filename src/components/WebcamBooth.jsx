@@ -61,17 +61,41 @@ const WebcamBooth = ({ onCapture, dualMode }) => {
     }
   }, []);
 
-  const startFeed = useCallback(async (index, vids, preferredId) => {
+  const startFeed = useCallback(async (index, vids, options = {}) => {
     try {
       if (streamsRef.current[index]) {
         streamsRef.current[index].getTracks().forEach((t) => t.stop());
       }
+      
+      // If we only have 1 camera and we want dual mode, clone the first stream to avoid black screen
+      if (options.cloneFromIndex !== undefined && streamsRef.current[options.cloneFromIndex]) {
+        const clone = streamsRef.current[options.cloneFromIndex].clone();
+        streamsRef.current[index] = clone;
+        setStreams((prev) => { const n = [...prev]; n[index] = clone; return n; });
+        if (videoRefs[index].current) videoRefs[index].current.srcObject = clone;
+        
+        const track = clone.getVideoTracks()[0];
+        const settings = track?.getSettings?.();
+        if (settings?.deviceId) {
+          setDeviceIds((prev) => { const n = [...prev]; n[index] = settings.deviceId; return n; });
+        }
+        return clone;
+      }
+
+      const videoConstraints = { width: { ideal: 1280 }, height: { ideal: 960 } };
+      if (options.deviceId) {
+        videoConstraints.deviceId = { exact: options.deviceId };
+      } else if (options.facingMode) {
+        videoConstraints.facingMode = { ideal: options.facingMode };
+      } else {
+        videoConstraints.facingMode = { ideal: 'user' };
+      }
+
       const constraints = {
-        video: preferredId
-          ? { deviceId: { exact: preferredId }, width: { ideal: 1280 }, height: { ideal: 960 } }
-          : { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 960 } },
+        video: videoConstraints,
         audio: false,
       };
+      
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       streamsRef.current[index] = stream;
       setStreams((prev) => { const n = [...prev]; n[index] = stream; return n; });
@@ -108,15 +132,25 @@ const WebcamBooth = ({ onCapture, dualMode }) => {
       const vids = await refreshDevices();
       if (cancelled || vids.length === 0) return;
 
+      // Assign distinct devices per feed when possible
       const front = vids.find(v => v.label.toLowerCase().includes('front') || v.label.toLowerCase().includes('user')) || vids[0];
-      await startFeed(0, vids, front.deviceId);
+      await startFeed(0, vids, { deviceId: front.deviceId });
 
       if (feedCount === 2) {
         let back = vids.find(v => v.label.toLowerCase().includes('back') || v.label.toLowerCase().includes('environment') || v.label.toLowerCase().includes('rear'));
         if (!back && vids.length > 1) {
           back = vids.find(v => v.deviceId !== front.deviceId);
         }
-        await startFeed(1, vids, back?.deviceId || front.deviceId);
+        
+        if (back) {
+          await startFeed(1, vids, { deviceId: back.deviceId });
+        } else if (vids.length === 1) {
+          // If there's only 1 camera on the device, clone it to avoid double usage errors
+          await startFeed(1, vids, { cloneFromIndex: 0 });
+        } else {
+          // Fallback to requesting the environment camera explicitly
+          await startFeed(1, vids, { facingMode: 'environment' });
+        }
       }
     })();
     return () => {
@@ -129,7 +163,7 @@ const WebcamBooth = ({ onCapture, dualMode }) => {
 
   const handleSelectDevice = (index, deviceId) => {
     setDeviceIds((prev) => { const n = [...prev]; n[index] = deviceId; return n; });
-    startFeed(index, devices, deviceId);
+    startFeed(index, devices, { deviceId });
   };
 
   const swapCameras = () => {
@@ -137,14 +171,14 @@ const WebcamBooth = ({ onCapture, dualMode }) => {
     setDeviceIds((prev) => {
       if (feedCount === 2) {
         const next = [prev[1] || devices[1]?.deviceId, prev[0] || devices[0]?.deviceId];
-        startFeed(0, devices, next[0]);
-        startFeed(1, devices, next[1]);
+        startFeed(0, devices, { deviceId: next[0] });
+        startFeed(1, devices, { deviceId: next[1] });
         return next;
       } else {
         const currentIndex = devices.findIndex(d => d.deviceId === prev[0]);
         const nextIndex = (currentIndex >= 0 ? currentIndex + 1 : 1) % devices.length;
         const nextId = devices[nextIndex].deviceId;
-        startFeed(0, devices, nextId);
+        startFeed(0, devices, { deviceId: nextId });
         return [nextId, prev[1]];
       }
     });

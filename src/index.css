@@ -317,6 +317,7 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: rgba(168, 85, 247, 0.6); }
 
 @media (max-width: 640px) {
+  .app-header { padding: 14px 16px; background: rgba(15, 9, 30, 0.95); }
   .header-nav { display: none; }
   .main-content { padding: 24px 14px 40px; }
 }
