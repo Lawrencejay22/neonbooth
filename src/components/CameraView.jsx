@@ -29,7 +29,7 @@ const CameraView = ({ onCapture, photos, onRemove, onNext, dualMode, setDualMode
       </div>
 
       <div className="stage-card glass-panel">
-        <WebcamBooth onCapture={onCapture} dualMode={dualMode} />
+        <WebcamBooth onCapture={onCapture} dualMode={dualMode} setDualMode={setDualMode} />
       </div>
 
       {/* Captured slots */}

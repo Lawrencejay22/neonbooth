@@ -29,6 +29,8 @@ const swatchStyle = (item) => {
     if (item.stars || item.bokeh || item.hearts || item.confetti) return { background: `radial-gradient(circle at 30% 30%, ${item.dot}55 2px, transparent 3px), radial-gradient(circle at 70% 60%, ${item.dot}88 2px, transparent 3px), radial-gradient(circle at 45% 80%, ${item.dot}44 2px, transparent 3px), ${item.base}` };
     return { background: `radial-gradient(${item.dot} 2.5px, transparent 3px), ${item.base}`, backgroundSize: '12px 12px' };
   }
+  if (item.type === 'chrome') return { background: `linear-gradient(135deg, ${(item.chromeColors || ['#e5e7eb', '#9ca3af', '#f9fafb', '#6b7280']).join(', ')})` };
+  if (item.type === 'holo') return { background: 'linear-gradient(135deg, #ff77e9, #7afcff, #a3ff8c, #fffb7a, #ff9d7a)' };
   if (item.type === 'none') return { background: 'transparent' };
   return { background: item.color };
 };

@@ -181,6 +181,16 @@ export const FRAMES = [
   { id: 'lime-pop', name: 'Lime Pop', type: 'gradient', colors: ['#a3e635', '#34d399', '#22d3ee'], width: 22, cat: 'green' },
   { id: 'flower', name: 'Flower Power', type: 'emoji', emoji: '🌸', width: 30, cat: 'green' },
   { id: 'dashed-white', name: 'Dashed White', type: 'dashed', color: '#ffffff', width: 8, cat: 'green' },
+
+  // ===== Trendy & Bold =====
+  { id: 'holo', name: 'Holographic', type: 'holo', width: 24, cat: 'trendy' },
+  { id: 'chrome', name: 'Chrome', type: 'chrome', width: 24, cat: 'trendy' },
+  { id: 'gold-foil', name: 'Gold Foil', type: 'chrome', chromeColors: ['#fff7cc', '#fbbf24', '#92400e', '#fde68a', '#fff7cc'], width: 24, cat: 'trendy' },
+  { id: 'rainbow', name: 'Rainbow Pop', type: 'gradient', colors: ['#ff4d8d', '#fbbf24', '#34d399', '#22d3ee', '#a855f7'], width: 24, cat: 'trendy' },
+  { id: 'vapor', name: 'Vaporwave', type: 'gradient', colors: ['#ff77e9', '#7afcff', '#8c52ff'], width: 24, cat: 'trendy' },
+  { id: 'glow-white', name: 'White Hot Glow', type: 'glow', color: '#ffffff', width: 14, cat: 'trendy' },
+  { id: 'y2k', name: 'Y2K Disc', type: 'emoji', emoji: '💿', width: 30, cat: 'trendy' },
+  { id: 'glitch', name: 'Glitch', type: 'dashed', color: '#ff4d8d', width: 10, cat: 'trendy' },
 ];
 
 // Frame picker grouping (order matters)
@@ -191,6 +201,7 @@ export const FRAME_CATEGORIES = [
   { id: 'blue', label: 'Blue & Cyan', icon: '💙' },
   { id: 'gold', label: 'Gold & Warm', icon: '💛' },
   { id: 'green', label: 'Green & Fresh', icon: '💚' },
+  { id: 'trendy', label: 'Trendy & Bold', icon: '🌈' },
 ];
 
 // ---------- Backgrounds / Backdrops (fills canvas behind photos) ----------
@@ -237,6 +248,12 @@ export const BACKGROUNDS = [
   { id: 'forest-bg', name: 'Forest Deep', type: 'gradient', colors: ['#052e16', '#14532d', '#166534'], cat: 'green', dark: true },
   { id: 'dots', name: 'Party Dots', type: 'pattern', base: '#fff7ed', dot: '#fb7185', cat: 'green' },
   { id: 'dots-mint', name: 'Mint Dots', type: 'pattern', base: '#ecfdf5', dot: '#34d399', cat: 'green' },
+
+  // ===== Trendy & Bold =====
+  { id: 'holo-bg', name: 'Holographic Dream', type: 'gradient', colors: ['#ff9a9e', '#fad0c4', '#fbc2eb', '#a6c1ee', '#84fab0'], cat: 'trendy' },
+  { id: 'vapor-bg', name: 'Vaporwave', type: 'gradient', colors: ['#2b0a3d', '#ff77e9', '#7afcff'], cat: 'trendy', dark: true },
+  { id: 'chrome-bg', name: 'Chrome Shine', type: 'gradient', colors: ['#e5e7eb', '#f9fafb', '#9ca3af', '#f9fafb'], cat: 'trendy' },
+  { id: 'acid', name: 'Acid Pop', type: 'gradient', colors: ['#d9f99d', '#4ade80', '#22d3ee'], cat: 'trendy' },
 ];
 
 // Backdrop picker grouping (order matters)
@@ -247,6 +264,7 @@ export const BACKGROUND_CATEGORIES = [
   { id: 'blue', label: 'Blue & Ocean', icon: '💙' },
   { id: 'gold', label: 'Gold & Sunset', icon: '💛' },
   { id: 'green', label: 'Green & Fresh', icon: '💚' },
+  { id: 'trendy', label: 'Trendy & Bold', icon: '🌈' },
 ];
 
 // ---------- Stickers (grouped by mood) ----------

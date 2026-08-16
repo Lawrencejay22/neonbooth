@@ -222,6 +222,27 @@ function drawFrame(ctx, frame, W, H) {
       ctx.fillText(frame.emoji, size * 0.7, y);
       ctx.fillText(frame.emoji, W - size * 0.7, y);
     }
+  } else if (frame.type === 'chrome') {
+    const colors = frame.chromeColors || ['#e5e7eb', '#9ca3af', '#f9fafb', '#6b7280', '#e5e7eb'];
+    const g = ctx.createLinearGradient(0, 0, W, H);
+    colors.forEach((c, i) => g.addColorStop(i / (colors.length - 1), c));
+    ctx.strokeStyle = g;
+    ctx.lineWidth = w * 1.8;
+    ctx.strokeRect(0, 0, W, H);
+    ctx.strokeStyle = 'rgba(255,255,255,0.65)';
+    ctx.lineWidth = Math.max(2, w * 0.22);
+    ctx.strokeRect(w * 0.9, w * 0.9, W - w * 1.8, H - w * 1.8);
+  } else if (frame.type === 'holo') {
+    const colors = ['#ff77e9', '#7afcff', '#a3ff8c', '#fffb7a', '#ff9d7a', '#ff77e9'];
+    const g = ctx.createLinearGradient(0, 0, W, H);
+    colors.forEach((c, i) => g.addColorStop(i / (colors.length - 1), c));
+    ctx.save();
+    ctx.strokeStyle = g;
+    ctx.shadowColor = '#ffffff';
+    ctx.shadowBlur = w * 1.3;
+    ctx.lineWidth = w * 1.6;
+    ctx.strokeRect(w * 0.8, w * 0.8, W - w * 1.6, H - w * 1.6);
+    ctx.restore();
   } else if (frame.type === 'film') {
     ctx.fillStyle = '#14101f';
     ctx.fillRect(0, 0, W, w); ctx.fillRect(0, H - w, W, w);

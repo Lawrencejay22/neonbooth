@@ -1,5 +1,5 @@
 import React from 'react';
-import { LAYOUTS } from '../lib/options';
+import { LAYOUTS, LAYOUT_CATEGORIES } from '../lib/options';
 
 // Renders a mini schematic preview of each layout
 const LayoutMini = ({ layout }) => {
@@ -26,24 +26,39 @@ const LayoutMini = ({ layout }) => {
 
 const LayoutView = ({ onSelectLayout, currentLayout }) => (
   <div className="view-container">
-    <h2 className="view-title">Pick your <span className="grad">layout</span></h2>
-    <p className="view-sub">Choose a frame for your shots — you can switch later in the editor without losing anything.</p>
+    <h2 className="view-title">Pick your <span className="grad">template</span></h2>
+    <p className="view-sub">
+      {Object.keys(LAYOUTS).length} templates in {LAYOUT_CATEGORIES.length} collections — switch later in the editor without losing anything.
+    </p>
 
-    <div className="layout-grid">
-      {Object.values(LAYOUTS).map((layout) => (
-        <div
-          key={layout.id}
-          className={`layout-card glass-panel ${currentLayout === layout.id ? 'selected' : ''}`}
-          onClick={() => onSelectLayout(layout.id)}
-        >
-          <LayoutMini layout={layout} />
-          <div>
-            <h4>{layout.name}</h4>
-            <p>{layout.desc} · {layout.slots} photo{layout.slots > 1 ? 's' : ''}</p>
+    {LAYOUT_CATEGORIES.map((cat) => {
+      const items = Object.values(LAYOUTS).filter((l) => l.cat === cat.id);
+      if (items.length === 0) return null;
+      return (
+        <div key={cat.id} className="layout-cat-block">
+          <div className="cat-header cat-header-lg">
+            <span className="cat-icon">{cat.icon}</span>
+            {cat.label}
+            <span className="cat-count">{items.length}</span>
+          </div>
+          <div className="layout-grid">
+            {items.map((layout) => (
+              <div
+                key={layout.id}
+                className={`layout-card glass-panel ${currentLayout === layout.id ? 'selected' : ''}`}
+                onClick={() => onSelectLayout(layout.id)}
+              >
+                <LayoutMini layout={layout} />
+                <div>
+                  <h4>{layout.name}</h4>
+                  <p>{layout.desc} · {layout.slots} photo{layout.slots > 1 ? 's' : ''}</p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
-      ))}
-    </div>
+      );
+    })}
   </div>
 );
 

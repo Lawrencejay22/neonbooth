@@ -2,44 +2,63 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { FILTERS } from '../lib/options';
 
 // A single live camera feed with its own device picker
-const CamFeed = ({ videoRef, stream, label, devices, selectedDeviceId, onSelectDevice, countdown, flashing, filterCss }) => (
-  <div className="cam-feed">
-    <video
-      ref={(el) => {
-        if (videoRef) videoRef.current = el;
-        if (el && stream && el.srcObject !== stream) el.srcObject = stream;
-      }}
-      autoPlay playsInline muted
-      style={{ filter: filterCss }}
-    />
-    <div className="cam-label"><span className="rec" />{label}</div>
-    {devices.length > 1 && (
-      <select
-        className="cam-select"
-        value={selectedDeviceId || ''}
-        onChange={(e) => onSelectDevice(e.target.value)}
-        title="Choose camera for this feed"
-      >
-        {devices.map((d, i) => (
-          <option key={d.deviceId || i} value={d.deviceId}>
-            {d.label || `Camera ${i + 1}`}
-          </option>
-        ))}
-      </select>
-    )}
-    {flashing && <div className="cam-flash" />}
-    {countdown !== null && countdown > 0 && <div className="cam-countdown">{countdown}</div>}
-  </div>
-);
+const CamFeed = ({ videoRef, stream, label, devices, selectedDeviceId, onSelectDevice, countdown, flashing, filterCss, placeholder }) => {
+  const localRef = useRef(null);
 
-const WebcamBooth = ({ onCapture, dualMode }) => {
+  // Keep the parent's ref pointed at the actual <video> node
+  useEffect(() => {
+    videoRef.current = localRef.current;
+  });
+
+  // Attach/detach the stream reactively instead of inside an inline ref
+  // callback (an inline arrow function gets a new identity every render,
+  // which made React re-fire the ref callback — and reassign srcObject —
+  // on every single re-render, causing flicker/stalls).
+  useEffect(() => {
+    if (localRef.current && localRef.current.srcObject !== (stream || null)) {
+      localRef.current.srcObject = stream || null;
+    }
+  }, [stream]);
+
+  return (
+    <div className="cam-feed">
+      <video ref={localRef} autoPlay playsInline muted style={{ filter: filterCss }} />
+      {!stream && (
+        <div className="cam-feed-empty">
+          <span style={{ fontSize: '1.6rem' }}>📷</span>
+          <span>{placeholder || 'Starting camera…'}</span>
+        </div>
+      )}
+      <div className="cam-label"><span className="rec" />{label}</div>
+      {devices.length > 1 && (
+        <select
+          className="cam-select"
+          value={selectedDeviceId || ''}
+          onChange={(e) => onSelectDevice(e.target.value)}
+          title="Choose camera for this feed"
+        >
+          {devices.map((d, i) => (
+            <option key={d.deviceId || i} value={d.deviceId}>
+              {d.label || `Camera ${i + 1}`}
+            </option>
+          ))}
+        </select>
+      )}
+      {flashing && <div className="cam-flash" />}
+      {countdown !== null && countdown > 0 && <div className="cam-countdown">{countdown}</div>}
+    </div>
+  );
+};
+
+const WebcamBooth = ({ onCapture, dualMode, setDualMode }) => {
   const videoRefs = [useRef(null), useRef(null)];
   const canvasRef = useRef(null);
   const streamsRef = useRef([null, null]);
 
   const [devices, setDevices] = useState([]);
   const [deviceIds, setDeviceIds] = useState([null, null]); // per-feed deviceId
-  const [error, setError] = useState('');
+  const [error, setError] = useState(''); // fatal: primary camera is down
+  const [warning, setWarning] = useState(''); // non-fatal: secondary camera issue
   const [countdown, setCountdown] = useState(null);
   const [flashing, setFlashing] = useState(false);
   const [filter, setFilter] = useState('none');
@@ -61,7 +80,11 @@ const WebcamBooth = ({ onCapture, dualMode }) => {
     }
   }, []);
 
-  const startFeed = useCallback(async (index, vids, options = {}) => {
+  // isPrimary controls how failures are reported: a primary (feed 0) failure
+  // is fatal and shows the full error screen; a secondary (feed 1) failure
+  // is just a warning and must never take down an already-working feed 0.
+  const startFeed = useCallback(async (index, options = {}) => {
+    const isPrimary = index === 0;
     try {
       const otherIndex = index === 0 ? 1 : 0;
       const otherStream = streamsRef.current[otherIndex];
@@ -77,63 +100,89 @@ const WebcamBooth = ({ onCapture, dualMode }) => {
       const applyStream = (streamToApply) => {
         streamsRef.current[index] = streamToApply;
         setStreams((prev) => { const n = [...prev]; n[index] = streamToApply; return n; });
-        if (videoRefs[index].current) videoRefs[index].current.srcObject = streamToApply;
-        
+
         const track = streamToApply.getVideoTracks()[0];
         const settings = track?.getSettings?.();
         if (settings?.deviceId) {
           setDeviceIds((prev) => { const n = [...prev]; n[index] = settings.deviceId; return n; });
         }
-        setError('');
+        if (isPrimary) setError('');
+        else setWarning('');
         return streamToApply;
       };
 
       // Intercept explicit requests to use the same device, or clone requests
       if (options.cloneFromIndex !== undefined || (options.deviceId && options.deviceId === otherDeviceId)) {
-         const sourceStream = streamsRef.current[options.cloneFromIndex !== undefined ? options.cloneFromIndex : otherIndex];
-         if (sourceStream) {
-            return applyStream(sourceStream);
-         }
+        const sourceStream = streamsRef.current[options.cloneFromIndex !== undefined ? options.cloneFromIndex : otherIndex];
+        if (sourceStream) {
+          return applyStream(sourceStream);
+        }
       }
 
-      const videoConstraints = { width: { ideal: 1280 }, height: { ideal: 960 } };
+      let videoConstraints = true;
       if (options.deviceId) {
-        videoConstraints.deviceId = { exact: options.deviceId };
+        videoConstraints = { deviceId: { exact: options.deviceId } };
       } else if (options.facingMode) {
-        videoConstraints.facingMode = { ideal: options.facingMode };
-      } else {
-        videoConstraints.facingMode = { ideal: 'user' };
+        videoConstraints = { facingMode: { ideal: options.facingMode } };
       }
 
-      const constraints = { video: videoConstraints, audio: false };
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      
+      let constraints = { video: videoConstraints, audio: false };
+      let stream;
+
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+      } catch (err) {
+        if (err.name === 'NotReadableError' || err.name === 'TrackStartError' || err.name === 'OverconstrainedError') {
+          // Hardware lock, or the exact device/facingMode couldn't be satisfied
+          // (very common for a second feed — most devices only expose one
+          // camera at a time). Fall back to basic constraints for the primary
+          // feed only; a secondary feed that can't get a distinct camera should
+          // just give up cleanly rather than fight for the primary's camera.
+          if (isPrimary) {
+            console.warn('First getUserMedia failed, retrying with basic constraints...');
+            constraints = { video: true, audio: false };
+            stream = await navigator.mediaDevices.getUserMedia(constraints);
+          } else {
+            throw err;
+          }
+        } else {
+          throw err;
+        }
+      }
+
       // If the browser returned a stream for the same physical device already in use:
       const newSettings = stream.getVideoTracks()[0]?.getSettings?.();
       if (newSettings?.deviceId && newSettings.deviceId === otherDeviceId && otherStream) {
-         // Stop this redundant hardware stream to avoid hardware lock/black screen
-         stream.getTracks().forEach(t => t.stop());
-         return applyStream(otherStream);
+        // Stop this redundant hardware stream to avoid hardware lock/black screen
+        stream.getTracks().forEach((t) => t.stop());
+        return applyStream(otherStream);
       }
 
       return applyStream(stream);
     } catch (err) {
       console.error(`Camera feed ${index} error:`, err);
-      setError('Camera access denied or unavailable. Please allow camera permission and retry.');
+      if (isPrimary) {
+        setError(`Camera access error: ${err.name} - ${err.message}. Please check permissions or if another app is using it.`);
+      } else {
+        // Never let a second-camera failure kill an already-working first feed.
+        // Fall back to single-cam mode gracefully and just let the user know.
+        setWarning('Only one camera could be accessed — switched back to single cam.');
+        setDualMode?.(false);
+      }
       return null;
     }
-  }, []);
+  }, [setDualMode]);
 
   // Manage camera streams based on dualMode without unnecessary teardown
   useEffect(() => {
     let cancelled = false;
 
     const setupCameras = async () => {
-      if (error) return; // Don't try to setup if we're in an error state
+      if (error) return; // Don't try to setup if the primary camera is in an error state
 
       // 1. Always ensure feed 0 is running
       if (!streamsRef.current[0]) {
-        const firstStream = await startFeed(0, null, { facingMode: 'user' });
+        const firstStream = await startFeed(0, { facingMode: 'user' });
         if (cancelled || !firstStream) return;
       }
 
@@ -145,27 +194,25 @@ const WebcamBooth = ({ onCapture, dualMode }) => {
       // 3. Manage feed 1 based on dualMode
       if (dualMode) {
         if (!streamsRef.current[1]) {
-          let back = vids.find(v => v.label.toLowerCase().includes('back') || v.label.toLowerCase().includes('environment') || v.label.toLowerCase().includes('rear'));
-          if (!back && vids.length > 1) back = vids.find(v => v.deviceId !== feed0Id);
-          
+          let back = vids.find((v) => /back|environment|rear/i.test(v.label));
+          if (!back && vids.length > 1) back = vids.find((v) => v.deviceId !== feed0Id);
+
           if (back) {
-            await startFeed(1, null, { deviceId: back.deviceId });
+            await startFeed(1, { deviceId: back.deviceId });
           } else if (vids.length <= 1) {
-            await startFeed(1, null, { cloneFromIndex: 0 });
+            await startFeed(1, { cloneFromIndex: 0 });
           } else {
-            await startFeed(1, null, { facingMode: 'environment' });
+            await startFeed(1, { facingMode: 'environment' });
           }
         }
-      } else {
-        if (streamsRef.current[1]) {
-          if (streamsRef.current[1] !== streamsRef.current[0]) {
-            streamsRef.current[1].getTracks().forEach(t => t.stop());
-          }
-          streamsRef.current[1] = null;
-          setStreams(prev => { const n = [...prev]; n[1] = null; return n; });
-          if (videoRefs[1].current) videoRefs[1].current.srcObject = null;
-          setDeviceIds(prev => { const n = [...prev]; n[1] = null; return n; });
+      } else if (streamsRef.current[1]) {
+        if (streamsRef.current[1] !== streamsRef.current[0]) {
+          streamsRef.current[1].getTracks().forEach((t) => t.stop());
         }
+        streamsRef.current[1] = null;
+        setStreams((prev) => { const n = [...prev]; n[1] = null; return n; });
+        setDeviceIds((prev) => { const n = [...prev]; n[1] = null; return n; });
+        setWarning('');
       }
     };
 
@@ -180,14 +227,14 @@ const WebcamBooth = ({ onCapture, dualMode }) => {
   useEffect(() => {
     return () => {
       const uniqueStreams = new Set(streamsRef.current.filter(Boolean));
-      uniqueStreams.forEach(s => s.getTracks().forEach(t => t.stop()));
+      uniqueStreams.forEach((s) => s.getTracks().forEach((t) => t.stop()));
       streamsRef.current = [null, null];
     };
   }, []);
 
   const handleSelectDevice = (index, deviceId) => {
     setDeviceIds((prev) => { const n = [...prev]; n[index] = deviceId; return n; });
-    startFeed(index, devices, { deviceId });
+    startFeed(index, { deviceId });
   };
 
   const swapCameras = () => {
@@ -195,14 +242,14 @@ const WebcamBooth = ({ onCapture, dualMode }) => {
     setDeviceIds((prev) => {
       if (feedCount === 2) {
         const next = [prev[1] || devices[1]?.deviceId, prev[0] || devices[0]?.deviceId];
-        startFeed(0, devices, { deviceId: next[0] });
-        startFeed(1, devices, { deviceId: next[1] });
+        startFeed(0, { deviceId: next[0] });
+        startFeed(1, { deviceId: next[1] });
         return next;
       } else {
-        const currentIndex = devices.findIndex(d => d.deviceId === prev[0]);
+        const currentIndex = devices.findIndex((d) => d.deviceId === prev[0]);
         const nextIndex = (currentIndex >= 0 ? currentIndex + 1 : 1) % devices.length;
         const nextId = devices[nextIndex].deviceId;
-        startFeed(0, devices, { deviceId: nextId });
+        startFeed(0, { deviceId: nextId });
         return [nextId, prev[1]];
       }
     });
@@ -272,6 +319,8 @@ const WebcamBooth = ({ onCapture, dualMode }) => {
 
   return (
     <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18 }}>
+      {warning && <div className="cam-warning">⚠️ {warning}</div>}
+
       <div className={`dual-grid ${dualMode ? 'dual' : ''}`}>
         {Array.from({ length: feedCount }).map((_, i) => (
           <CamFeed
@@ -285,6 +334,7 @@ const WebcamBooth = ({ onCapture, dualMode }) => {
             countdown={countdown}
             flashing={flashing}
             filterCss={filterCss}
+            placeholder={i === 1 ? 'Connecting second camera…' : 'Starting camera…'}
           />
         ))}
       </div>
