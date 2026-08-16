@@ -96,16 +96,28 @@ const WebcamBooth = ({ onCapture, dualMode }) => {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const vids = await refreshDevices();
-      if (cancelled) return;
-      // Assign distinct devices per feed when possible
-      await startFeed(0, vids, vids[0]?.deviceId || null);
-      if (feedCount === 2) {
-        const second = vids.length > 1 ? vids[1].deviceId : vids[0]?.deviceId || null;
-        await startFeed(1, vids, second);
+      try {
+        const tempStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        tempStream.getTracks().forEach(t => t.stop());
+      } catch (err) {
+        if (!cancelled) setError('Camera access denied or unavailable. Please allow camera permission and retry.');
+        return;
       }
-      // Re-enumerate now that we have permission (labels unlocked)
-      refreshDevices();
+      if (cancelled) return;
+
+      const vids = await refreshDevices();
+      if (cancelled || vids.length === 0) return;
+
+      const front = vids.find(v => v.label.toLowerCase().includes('front') || v.label.toLowerCase().includes('user')) || vids[0];
+      await startFeed(0, vids, front.deviceId);
+
+      if (feedCount === 2) {
+        let back = vids.find(v => v.label.toLowerCase().includes('back') || v.label.toLowerCase().includes('environment') || v.label.toLowerCase().includes('rear'));
+        if (!back && vids.length > 1) {
+          back = vids.find(v => v.deviceId !== front.deviceId);
+        }
+        await startFeed(1, vids, back?.deviceId || front.deviceId);
+      }
     })();
     return () => {
       cancelled = true;
@@ -123,10 +135,18 @@ const WebcamBooth = ({ onCapture, dualMode }) => {
   const swapCameras = () => {
     if (devices.length < 2) return;
     setDeviceIds((prev) => {
-      const next = [prev[1], prev[0]];
-      startFeed(0, devices, next[0]);
-      if (feedCount === 2) startFeed(1, devices, next[1]);
-      return next;
+      if (feedCount === 2) {
+        const next = [prev[1] || devices[1]?.deviceId, prev[0] || devices[0]?.deviceId];
+        startFeed(0, devices, next[0]);
+        startFeed(1, devices, next[1]);
+        return next;
+      } else {
+        const currentIndex = devices.findIndex(d => d.deviceId === prev[0]);
+        const nextIndex = (currentIndex >= 0 ? currentIndex + 1 : 1) % devices.length;
+        const nextId = devices[nextIndex].deviceId;
+        startFeed(0, devices, nextId);
+        return [nextId, prev[1]];
+      }
     });
     forceTick((t) => t + 1);
   };
