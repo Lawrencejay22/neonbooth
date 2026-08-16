@@ -63,23 +63,37 @@ const WebcamBooth = ({ onCapture, dualMode }) => {
 
   const startFeed = useCallback(async (index, vids, options = {}) => {
     try {
+      const otherIndex = index === 0 ? 1 : 0;
+      const otherStream = streamsRef.current[otherIndex];
+      const otherDeviceId = otherStream?.getVideoTracks()[0]?.getSettings?.()?.deviceId;
+
       if (streamsRef.current[index]) {
-        streamsRef.current[index].getTracks().forEach((t) => t.stop());
+        // Only stop tracks if they aren't being shared with the other feed
+        if (streamsRef.current[index] !== otherStream) {
+          streamsRef.current[index].getTracks().forEach((t) => t.stop());
+        }
       }
-      
-      // If we only have 1 camera and we want dual mode, clone the first stream to avoid black screen
-      if (options.cloneFromIndex !== undefined && streamsRef.current[options.cloneFromIndex]) {
-        const clone = streamsRef.current[options.cloneFromIndex].clone();
-        streamsRef.current[index] = clone;
-        setStreams((prev) => { const n = [...prev]; n[index] = clone; return n; });
-        if (videoRefs[index].current) videoRefs[index].current.srcObject = clone;
+
+      const applyStream = (streamToApply) => {
+        streamsRef.current[index] = streamToApply;
+        setStreams((prev) => { const n = [...prev]; n[index] = streamToApply; return n; });
+        if (videoRefs[index].current) videoRefs[index].current.srcObject = streamToApply;
         
-        const track = clone.getVideoTracks()[0];
+        const track = streamToApply.getVideoTracks()[0];
         const settings = track?.getSettings?.();
         if (settings?.deviceId) {
           setDeviceIds((prev) => { const n = [...prev]; n[index] = settings.deviceId; return n; });
         }
-        return clone;
+        setError('');
+        return streamToApply;
+      };
+
+      // Intercept explicit requests to use the same device, or clone requests
+      if (options.cloneFromIndex !== undefined || (options.deviceId && options.deviceId === otherDeviceId)) {
+         const sourceStream = streamsRef.current[options.cloneFromIndex !== undefined ? options.cloneFromIndex : otherIndex];
+         if (sourceStream) {
+            return applyStream(sourceStream);
+         }
       }
 
       const videoConstraints = { width: { ideal: 1280 }, height: { ideal: 960 } };
@@ -91,24 +105,18 @@ const WebcamBooth = ({ onCapture, dualMode }) => {
         videoConstraints.facingMode = { ideal: 'user' };
       }
 
-      const constraints = {
-        video: videoConstraints,
-        audio: false,
-      };
-      
+      const constraints = { video: videoConstraints, audio: false };
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      streamsRef.current[index] = stream;
-      setStreams((prev) => { const n = [...prev]; n[index] = stream; return n; });
-      if (videoRefs[index].current) videoRefs[index].current.srcObject = stream;
-
-      // Track which physical device we got
-      const track = stream.getVideoTracks()[0];
-      const settings = track?.getSettings?.();
-      if (settings?.deviceId) {
-        setDeviceIds((prev) => { const n = [...prev]; n[index] = settings.deviceId; return n; });
+      
+      // If the browser returned a stream for the same physical device already in use:
+      const newSettings = stream.getVideoTracks()[0]?.getSettings?.();
+      if (newSettings?.deviceId && newSettings.deviceId === otherDeviceId && otherStream) {
+         // Stop this redundant hardware stream to avoid hardware lock/black screen
+         stream.getTracks().forEach(t => t.stop());
+         return applyStream(otherStream);
       }
-      setError('');
-      return stream;
+
+      return applyStream(stream);
     } catch (err) {
       console.error(`Camera feed ${index} error:`, err);
       setError('Camera access denied or unavailable. Please allow camera permission and retry.');
@@ -150,7 +158,9 @@ const WebcamBooth = ({ onCapture, dualMode }) => {
         }
       } else {
         if (streamsRef.current[1]) {
-          streamsRef.current[1].getTracks().forEach(t => t.stop());
+          if (streamsRef.current[1] !== streamsRef.current[0]) {
+            streamsRef.current[1].getTracks().forEach(t => t.stop());
+          }
           streamsRef.current[1] = null;
           setStreams(prev => { const n = [...prev]; n[1] = null; return n; });
           if (videoRefs[1].current) videoRefs[1].current.srcObject = null;
@@ -169,7 +179,8 @@ const WebcamBooth = ({ onCapture, dualMode }) => {
   // Unmount cleanup
   useEffect(() => {
     return () => {
-      streamsRef.current.forEach((s) => s?.getTracks().forEach((t) => t.stop()));
+      const uniqueStreams = new Set(streamsRef.current.filter(Boolean));
+      uniqueStreams.forEach(s => s.getTracks().forEach(t => t.stop()));
       streamsRef.current = [null, null];
     };
   }, []);
