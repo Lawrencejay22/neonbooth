@@ -132,18 +132,16 @@ const WebcamBooth = ({ onCapture, dualMode, setDualMode }) => {
       try {
         stream = await navigator.mediaDevices.getUserMedia(constraints);
       } catch (err) {
-        if (err.name === 'NotReadableError' || err.name === 'TrackStartError' || err.name === 'OverconstrainedError') {
-          // Hardware lock, or the exact device/facingMode couldn't be satisfied
-          // (very common for a second feed — most devices only expose one
-          // camera at a time). Fall back to basic constraints for the primary
-          // feed only; a secondary feed that can't get a distinct camera should
-          // just give up cleanly rather than fight for the primary's camera.
-          if (isPrimary) {
-            console.warn('First getUserMedia failed, retrying with basic constraints...');
+        // If the user didn't explicitly deny permission, and it's the primary feed,
+        // aggressively fall back to the most basic video constraints possible.
+        // This helps desktop devices that might reject specific constraints.
+        if (isPrimary && err.name !== 'NotAllowedError' && err.name !== 'SecurityError') {
+          console.warn(`Camera request failed (${err.name}), retrying with basic constraints...`);
+          try {
             constraints = { video: true, audio: false };
             stream = await navigator.mediaDevices.getUserMedia(constraints);
-          } else {
-            throw err;
+          } catch (fallbackErr) {
+            throw fallbackErr;
           }
         } else {
           throw err;
