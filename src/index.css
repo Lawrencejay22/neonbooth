@@ -691,6 +691,188 @@ body {
   box-shadow: 0 4px 14px rgba(168, 85, 247, 0.35);
 }
 
+.cam-feed img.wifi-frame,
+.cam-feed canvas.wifi-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.cam-feed .wifi-frame.mirrored {
+  transform: scaleX(-1);
+}
+
+.cam-feed-empty {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 22px;
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  background: rgba(10, 6, 20, 0.72);
+}
+
+.cam-warning {
+  width: 100%;
+  max-width: 620px;
+  padding: 11px 16px;
+  border-radius: 12px;
+  background: rgba(251, 113, 133, 0.14);
+  border: 1px solid rgba(251, 113, 133, 0.45);
+  color: var(--text);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+/* ---------- Wireless camera controls ---------- */
+.cam-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  width: 100%;
+}
+
+.cam-controls-side {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.cam-controls-side.right {
+  justify-content: flex-start;
+}
+
+.wifi-host {
+  max-width: 132px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- Wi-Fi connect dialog ---------- */
+.wifi-modal {
+  max-width: 560px;
+}
+
+.wifi-presets,
+.wifi-modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.wifi-presets {
+  margin-bottom: 18px;
+}
+
+.wifi-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.wifi-field > span {
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.wifi-url,
+.wifi-select {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--stroke);
+  background: var(--glass);
+  color: var(--text);
+  font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+  font-size: 0.82rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.wifi-select {
+  font-family: 'Outfit', sans-serif;
+  width: auto;
+  align-self: flex-start;
+  cursor: pointer;
+}
+
+.wifi-url:focus {
+  border-color: var(--purple);
+}
+
+.wifi-check {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 18px;
+  font-size: 0.8rem;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.wifi-error {
+  margin-top: 16px;
+  padding: 11px 14px;
+  border-radius: 12px;
+  background: rgba(251, 113, 133, 0.14);
+  border: 1px solid rgba(251, 113, 133, 0.45);
+  color: var(--text);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.wifi-help {
+  margin-top: 18px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(20, 12, 28, 0.5);
+  border: 1px solid var(--stroke);
+  font-size: 0.74rem;
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+
+.wifi-help b {
+  color: var(--text);
+  display: block;
+  margin-bottom: 6px;
+}
+
+.wifi-help ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.wifi-help li {
+  margin-bottom: 5px;
+}
+
+.wifi-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 22px;
+}
+
 .shutter-btn {
   width: 84px;
   height: 84px;
@@ -794,27 +976,42 @@ body {
 
 /* ---------- Layout picker ---------- */
 .layout-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   width: 100%;
-  margin-top: 30px;
+  max-width: 620px;
+  margin: 30px auto 0;
+}
+
+.layout-cat-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.layout-cat-row:first-child {
+  margin-top: 0;
 }
 
 .layout-card {
-  padding: 18px 14px;
+  padding: 12px 16px;
   border-radius: var(--radius);
   cursor: pointer;
   transition: all 0.25s;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
   border: 2px solid var(--stroke);
+  text-align: left;
 }
 
 .layout-card:hover {
-  transform: translateY(-5px);
+  transform: translateY(-2px);
   border-color: var(--purple);
   box-shadow: var(--shadow-glow);
 }
@@ -831,6 +1028,7 @@ body {
   display: flex;
   gap: 4px;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  flex-shrink: 0;
 }
 
 .layout-mini .mb {
@@ -838,14 +1036,46 @@ body {
   background: linear-gradient(135deg, #ff4d8d, #a855f7);
 }
 
+/* Two-up strip previews read as paper cards on a dark mat */
+.layout-mini-strips {
+  background: rgba(20, 12, 28, 0.55);
+  border: 1px solid var(--stroke);
+}
+
+.layout-mini-strip {
+  background: #fff;
+  border-radius: 2px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
+.layout-mini-strip .mb {
+  border-radius: 1px;
+}
+
+.layout-mini-strip .mbh {
+  position: absolute;
+  left: 7%;
+  top: 4.5%;
+  width: 86%;
+  height: 7.5%;
+  border-radius: 1px;
+  background: #2b2130;
+}
+
+.layout-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
 .layout-card h4 {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   font-weight: 700;
 }
 
 .layout-card p {
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   color: var(--text-dim);
+  margin-top: 3px;
 }
 
 /* ---------- Editor ---------- */
@@ -867,8 +1097,10 @@ body {
 .preview-stage {
   padding: 26px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 14px;
   min-height: 480px;
 }
 
@@ -877,6 +1109,46 @@ body {
   max-height: 62vh;
   border-radius: 10px;
   box-shadow: 0 14px 50px rgba(0, 0, 0, 0.5);
+}
+
+.photo-adjust {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+  width: 100%;
+  max-width: 560px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--glass);
+  border: 1px solid var(--stroke);
+  font-size: 0.82rem;
+  color: var(--text);
+}
+
+.photo-adjust b {
+  color: var(--cyan, #22d3ee);
+  white-space: nowrap;
+}
+
+.photo-adjust-hint {
+  color: var(--text-dim);
+  font-size: 0.72rem;
+  flex: 1 1 140px;
+  min-width: 120px;
+}
+
+.photo-adjust-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.photo-adjust-tools input[type='range'] {
+  width: 110px;
+  accent-color: #a855f7;
+  cursor: pointer;
 }
 
 .editor-panel {
@@ -959,6 +1231,66 @@ body {
 .swatch.selected {
   border-color: #fff;
   box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3), 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+
+.design-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+
+.design-remove {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(20, 16, 31, 0.75);
+  color: #fff;
+  font-size: 0.6rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.swatch:hover .design-remove {
+  opacity: 1;
+}
+
+.design-import-btn {
+  margin-left: auto;
+  padding: 5px 12px;
+  font-size: 0.72rem;
+}
+
+.cat-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 18px 0 10px;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.cat-section:first-child .cat-header {
+  margin-top: 0;
+}
+
+.cat-count {
+  background: var(--glass-strong, rgba(255, 255, 255, 0.08));
+  border: 1px solid var(--stroke, rgba(255, 255, 255, 0.12));
+  border-radius: 99px;
+  padding: 1px 8px;
+  font-size: 0.68rem;
+  color: var(--text-dim, #9a8fb0);
 }
 
 .sticker-grid {
@@ -1070,6 +1402,234 @@ body {
     opacity: 1;
     transform: translate(-50%, 0);
   }
+}
+
+/* ---------- Print dialog ---------- */
+.print-modal {
+  max-width: 560px;
+}
+
+.print-size-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 12px;
+}
+
+.print-size-card {
+  font-family: 'Outfit', sans-serif;
+  background: var(--glass);
+  border: 2px solid var(--stroke);
+  border-radius: 16px;
+  padding: 14px 8px 12px;
+  cursor: pointer;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+}
+
+.print-size-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--purple);
+}
+
+.print-size-card.active {
+  border-color: var(--pink);
+  box-shadow: 0 0 0 3px rgba(255, 77, 141, 0.25);
+  background: var(--glass-strong);
+}
+
+.print-size-card b {
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.print-size-card small {
+  font-size: 0.62rem;
+  color: var(--text-dim);
+}
+
+/* Little paper-shape previews matching each size's proportions */
+.print-size-shape {
+  display: block;
+  background: #fff;
+  border-radius: 3px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+}
+
+.shape-2x6 { width: 16px; height: 48px; }
+.shape-4x6 { width: 28px; height: 42px; }
+.shape-5x7 { width: 30px; height: 42px; }
+.shape-a4 { width: 30px; height: 42px; }
+.shape-letter { width: 34px; height: 44px; }
+
+.print-copies {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 20px;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.copies-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--glass);
+  border: 1px solid var(--stroke);
+  border-radius: 999px;
+  padding: 4px;
+}
+
+.copies-stepper button {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: var(--glass-strong);
+  color: var(--text);
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.copies-stepper button:hover {
+  background: var(--grad-btn);
+}
+
+.copies-stepper b {
+  min-width: 32px;
+  text-align: center;
+  font-size: 1rem;
+}
+
+/* ---------- QR + photo detail ---------- */
+.qr-tile {
+  font-family: 'Outfit', sans-serif;
+  background: #ffffff;
+  border: none;
+  border-radius: 18px;
+  padding: 14px 14px 10px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  transition: transform 0.2s, box-shadow 0.2s;
+  color: #3d2f3f;
+}
+
+.qr-tile:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-glow);
+}
+
+.qr-tile img {
+  width: 150px;
+  height: 150px;
+  display: block;
+  border-radius: 8px;
+}
+
+.qr-tile span {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #6b5a75;
+  letter-spacing: 0.3px;
+}
+
+.detail-modal {
+  max-width: 780px;
+}
+
+.detail-body {
+  display: grid;
+  grid-template-columns: 1fr 240px;
+  gap: 22px;
+  align-items: start;
+}
+
+@media (max-width: 680px) {
+  .detail-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+.detail-photo {
+  width: 100%;
+  max-height: 62vh;
+  object-fit: contain;
+  border-radius: 12px;
+  box-shadow: 0 14px 50px rgba(0, 0, 0, 0.5);
+  background: #000;
+}
+
+.detail-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+/* ---------- Actual printing ---------- */
+/* The print area lives on <body> (React portal). On screen it's invisible;
+   @media print hides the whole app and shows only these sheets. */
+.print-area {
+  display: none;
+}
+
+@media print {
+  .app-wrapper {
+    display: none !important;
+  }
+
+  .print-area {
+    display: block !important;
+  }
+
+  @page {
+    margin: 0;
+  }
+
+  @page page-2x6 { size: 2in 6in; margin: 0; }
+  @page page-4x6 { size: 4in 6in; margin: 0; }
+  @page page-5x7 { size: 5in 7in; margin: 0; }
+  @page page-a4 { size: A4; margin: 0; }
+  @page page-letter { size: letter; margin: 0; }
+
+  .print-sheet {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    break-after: page;
+    page-break-after: always;
+  }
+
+  .print-sheet:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  .print-sheet img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+
+  /* Each size class assigns its named page to the sheets inside */
+  .print-area.page-2x6 .print-sheet { page: page-2x6; }
+  .print-area.page-4x6 .print-sheet { page: page-4x6; }
+  .print-area.page-5x7 .print-sheet { page: page-5x7; }
+  .print-area.page-a4 .print-sheet { page: page-a4; }
+  .print-area.page-letter .print-sheet { page: page-letter; }
 }
 
 /* ---------- Gallery modal ---------- */

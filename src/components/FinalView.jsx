@@ -1,5 +1,8 @@
 import React, { useRef, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
+import QRCode from 'qrcode';
 import { composeCard } from '../lib/compose';
+import { PRINT_SIZES } from '../lib/options';
 
 const FinalView = ({ photos, edit, onDone, onEdit }) => {
   const canvasRef = useRef(null);
@@ -8,11 +11,32 @@ const FinalView = ({ photos, edit, onDone, onEdit }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedUrl, setUploadedUrl] = useState('');
 
+  // Print
+  const [showPrint, setShowPrint] = useState(false);
+  const [printSize, setPrintSize] = useState('4x6');
+  const [copies, setCopies] = useState(1);
+  const [printImage, setPrintImage] = useState('');
+
+  // QR + photo detail
+  const [qrUrl, setQrUrl] = useState('');
+  const [showDetail, setShowDetail] = useState(false);
+  const [detailImg, setDetailImg] = useState('');
+
   useEffect(() => {
     if (canvasRef.current && photos.length > 0) {
       composeCard(canvasRef.current, photos, edit).then(() => setReady(true));
     }
   }, [photos, edit]);
+
+  // Build the QR for the uploaded link whenever it changes
+  useEffect(() => {
+    if (!uploadedUrl) { setQrUrl(''); return; }
+    QRCode.toDataURL(uploadedUrl, {
+      width: 260,
+      margin: 1,
+      color: { dark: '#1b1030', light: '#ffffff' },
+    }).then(setQrUrl).catch(() => setQrUrl(''));
+  }, [uploadedUrl]);
 
   const showToast = (msg) => {
     setToast(msg);
@@ -113,7 +137,7 @@ const FinalView = ({ photos, edit, onDone, onEdit }) => {
       }
 
       setUploadedUrl(shareUrl);
-      showToast('☁️ Uploaded! Anyone can open the link below on any device.');
+      showToast('☁️ Uploaded! QR code is ready below.');
     } catch (err) {
       console.error(err);
       showToast(`⚠️ ${err.message || 'Upload failed'}`);
@@ -122,10 +146,54 @@ const FinalView = ({ photos, edit, onDone, onEdit }) => {
     }
   };
 
+  // ---------- Print ----------
+  const openPrint = () => {
+    setPrintImage(canvasRef.current.toDataURL('image/png'));
+    setShowPrint(true);
+  };
+
+  // Grabs a fresh render, closes the dialog and fires the browser print —
+  // with the @page rules in index.css the sheet comes out at exactly the
+  // selected size, copies included.
+  const doPrint = () => {
+    setPrintImage(canvasRef.current.toDataURL('image/png'));
+    setShowPrint(false);
+    setTimeout(() => window.print(), 120);
+  };
+
+  // ---------- Photo detail (QR click) ----------
+  const openDetail = () => {
+    setDetailImg(canvasRef.current.toDataURL('image/png'));
+    setShowDetail(true);
+  };
+  const closeDetail = () => setShowDetail(false);
+
+  const copyLink = (url) => {
+    navigator.clipboard.writeText(url).then(
+      () => showToast('📋 Link copied!'),
+      () => showToast('⚠️ Could not copy link')
+    );
+  };
+
+  const handleDetailShare = async () => {
+    const url = uploadedUrl || window.location.href;
+    const text = 'Our Neon Booth photo! 📸';
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'Neon Booth', text, url });
+        showToast('🚀 Shared!');
+        return;
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+      }
+    }
+    copyLink(url);
+  };
+
   return (
     <div className="view-container">
       <h2 className="view-title">Your <span className="grad">final shot</span> ✨</h2>
-      <p className="view-sub">Download it, or share it straight to your friends & your favorite couple chat.</p>
+      <p className="view-sub">Download it, print it, or share it straight to your friends & your favorite couple chat.</p>
 
       <div className="final-wrap">
         <div className="final-stage glass-panel">
@@ -156,20 +224,35 @@ const FinalView = ({ photos, edit, onDone, onEdit }) => {
               <button className="btn btn-gold btn-lg" onClick={handleUpload} disabled={isUploading}>
                 ☁️ {isUploading ? 'Uploading...' : 'Upload to Cloud'}
               </button>
+              <button className="btn btn-green btn-lg" onClick={openPrint}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="6 9 6 2 18 2 18 9" />
+                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                  <rect x="6" y="14" width="12" height="8" />
+                </svg>
+                Print
+              </button>
             </div>
-            
+
             {uploadedUrl && (
-              <div style={{ marginTop: 20, padding: 14, background: 'var(--glass)', borderRadius: 12, border: '1px solid var(--stroke)', width: '100%', maxWidth: 500, textAlign: 'center' }}>
+              <div style={{ marginTop: 20, padding: 18, background: 'var(--glass)', borderRadius: 12, border: '1px solid var(--stroke)', width: '100%', maxWidth: 520, textAlign: 'center' }}>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-dim)', marginBottom: 6 }}>Your photo is live at:</p>
                 <a href={uploadedUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--cyan)', fontWeight: 600, wordBreak: 'break-all' }}>
                   {uploadedUrl}
                 </a>
                 <div style={{ marginTop: 10 }}>
-                   <button className="btn btn-ghost btn-sm" onClick={() => { navigator.clipboard.writeText(uploadedUrl); showToast('📋 Link copied!'); }}>📋 Copy Link</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => copyLink(uploadedUrl)}>📋 Copy Link</button>
                 </div>
+
+                {qrUrl && (
+                  <button className="qr-tile" style={{ margin: '16px auto 0' }} onClick={openDetail} title="View photo details">
+                    <img src={qrUrl} alt="QR code — tap for photo details" />
+                    <span>Tap the QR to view photo details</span>
+                  </button>
+                )}
               </div>
             )}
-            
+
             <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', justifyContent: 'center', marginTop: 16 }}>
               <button className="btn btn-ghost" onClick={handleCopy}>📋 Copy</button>
               <button className="btn btn-gold" onClick={onEdit}>← Edit more</button>
@@ -179,7 +262,100 @@ const FinalView = ({ photos, edit, onDone, onEdit }) => {
         )}
       </div>
 
+      {/* ---------- Print dialog ---------- */}
+      {showPrint && (
+        <div className="modal-overlay" onClick={() => setShowPrint(false)}>
+          <div className="modal-card glass-panel print-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h2>Print your photo 🖨️</h2>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowPrint(false)}>✕</button>
+            </div>
+            <p className="hint-text" style={{ marginTop: 0, marginBottom: 18, textAlign: 'center' }}>
+              Pick a paper size and hit Print — the print dialog opens with your photo fitted to the sheet.
+            </p>
+
+            <div className="print-size-grid">
+              {PRINT_SIZES.map((s) => (
+                <button
+                  key={s.id}
+                  className={`print-size-card ${printSize === s.id ? 'active' : ''}`}
+                  onClick={() => setPrintSize(s.id)}
+                >
+                  <span className={`print-size-shape shape-${s.id}`} />
+                  <b>{s.label}</b>
+                  <small>{s.desc}</small>
+                </button>
+              ))}
+            </div>
+
+            <div className="print-copies">
+              <span>Copies</span>
+              <div className="copies-stepper">
+                <button onClick={() => setCopies((c) => Math.max(1, c - 1))} aria-label="Fewer copies">−</button>
+                <b>{copies}</b>
+                <button onClick={() => setCopies((c) => Math.min(6, c + 1))} aria-label="More copies">+</button>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 24, flexWrap: 'wrap' }}>
+              <button className="btn btn-primary btn-lg" onClick={doPrint}>🖨 Print now</button>
+              <button className="btn btn-ghost btn-lg" onClick={() => setShowPrint(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------- Photo detail (QR) dialog ---------- */}
+      {showDetail && (
+        <div className="modal-overlay" onClick={closeDetail}>
+          <div className="modal-card glass-panel detail-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h2>Photo details 📸</h2>
+              <button className="btn btn-ghost btn-sm" onClick={closeDetail}>✕</button>
+            </div>
+            <div className="detail-body">
+              <img className="detail-photo" src={detailImg} alt="Final photo" />
+              <div className="detail-side">
+                {qrUrl && (
+                  <button className="qr-tile" onClick={() => window.open(uploadedUrl, '_blank')} title="Open the link">
+                    <img src={qrUrl} alt="QR code" />
+                    <span>Scan to open on any phone</span>
+                  </button>
+                )}
+                <p className="hint-text" style={{ textAlign: 'center' }}>
+                  Anyone who scans this code gets this exact photo — perfect next to the printer at your booth.
+                </p>
+                <div style={{ display: 'flex', gap: 10, flexDirection: 'column' }}>
+                  <button className="btn btn-primary btn-lg" onClick={handleDetailShare}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
+                      <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                    </svg>
+                    Share
+                  </button>
+                  <button className="btn btn-ghost btn-lg" onClick={closeDetail}>Cancel</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {toast && <div className="share-toast">{toast}</div>}
+
+      {/* Off-screen sheets the browser actually prints (portal keeps it
+          outside .app-wrapper so the print CSS can hide the app) */}
+      {createPortal(
+        <div className={`print-area page-${printSize}`}>
+          {printImage &&
+            Array.from({ length: copies }).map((_, i) => (
+              <div className="print-sheet" key={i}>
+                <img src={printImage} alt="" />
+              </div>
+            ))}
+        </div>,
+        document.body
+      )}
     </div>
   );
 };

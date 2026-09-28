@@ -5,7 +5,7 @@ import {
   BACKGROUNDS, BACKGROUND_CATEGORIES,
   STICKER_GROUPS,
 } from '../lib/options';
-import { composeCard } from '../lib/compose';
+import { composeCard, photoPlan, photoAtPoint, coverCrop, loadImage, MIN_ZOOM, MAX_ZOOM } from '../lib/compose';
 
 const TABS = [
   { id: 'layout', label: 'Layout', icon: '▦' },
@@ -62,23 +62,138 @@ const SwatchSection = ({ cat, items, selectedId, onPick, labelKey = 'name' }) =>
   );
 };
 
+// User-imported frame/backdrop designs with import + remove controls
+const CustomDesignSection = ({ title, items, selectedId, onPick, onImport, onRemove, hint }) => (
+  <div className="cat-section">
+    <div className="cat-header">
+      <span className="cat-icon">🪄</span>
+      {title}
+      <button className="btn btn-ghost btn-sm design-import-btn" onClick={onImport}>＋ Import design</button>
+    </div>
+    {items.length > 0 ? (
+      <div className="swatch-grid">
+        {items.map((it) => (
+          <div
+            key={it.id}
+            className={`swatch ${selectedId === it.id ? 'selected' : ''}`}
+            title={it.name}
+            onClick={() => onPick(it.id)}
+          >
+            <img src={it.src} alt={it.name} className="design-thumb" />
+            <button
+              className="design-remove"
+              title="Remove design"
+              onClick={(e) => { e.stopPropagation(); onRemove(it.id); }}
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+      </div>
+    ) : (
+      <p className="hint-text" style={{ marginTop: 0 }}>{hint}</p>
+    )}
+  </div>
+);
+
 const EditView = ({ photos, edit, setEdit, onSave, onBack }) => {
   const canvasRef = useRef(null);
   const stageRef = useRef(null);
+  const frameFileRef = useRef(null);
+  const bgFileRef = useRef(null);
   const [tab, setTab] = useState('frame');
   const [dragging, setDragging] = useState(null);
   const [selectedSticker, setSelectedSticker] = useState(null);
   const [stickerGroup, setStickerGroup] = useState(STICKER_GROUPS[0].id);
+  const [toast, setToast] = useState('');
+  const [selectedPhoto, setSelectedPhoto] = useState(null);
+  const [draggingPhoto, setDraggingPhoto] = useState(false);
+  const photoDrag = useRef(null);
+  const imgSizes = useRef({});
+
+  const activePhoto = selectedPhoto !== null && selectedPhoto < photos.length ? selectedPhoto : null;
 
   const render = useCallback(() => {
     if (canvasRef.current && photos.length > 0) {
-      composeCard(canvasRef.current, photos, edit);
+      composeCard(canvasRef.current, photos, edit, { selectedPhoto: activePhoto });
     }
-  }, [photos, edit]);
+  }, [photos, edit, activePhoto]);
 
   useEffect(() => { render(); }, [render]);
 
+  // Pan limits depend on each shot's real pixel size; the renderer caches these
+  // already, so pulling them here is cheap and keeps dragging from overshooting.
+  useEffect(() => {
+    photos.forEach((p, i) => {
+      if (imgSizes.current[i]) return;
+      loadImage(p).then((img) => { imgSizes.current[i] = { w: img.width, h: img.height }; }).catch(() => {});
+    });
+  }, [photos]);
+
   const update = (patch) => setEdit((prev) => ({ ...prev, ...patch }));
+
+  const updatePhotoAdjust = (index, patch) => setEdit((prev) => {
+    const cur = (prev.photoAdjust || {})[index] || {};
+    return { ...prev, photoAdjust: { ...prev.photoAdjust, [index]: { ...cur, ...patch } } };
+  });
+
+  const resetPhoto = (index) => setEdit((prev) => {
+    const next = { ...prev.photoAdjust };
+    delete next[index];
+    return { ...prev, photoAdjust: next };
+  });
+
+  const showToast = (msg) => {
+    setToast(msg);
+    setTimeout(() => setToast(''), 2600);
+  };
+
+  const readFile = (file) =>
+    new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = reject;
+      r.readAsDataURL(file);
+    });
+
+  // Import user designs — kind: 'frame' | 'background'
+  const importDesign = (kind) => async (e) => {
+    const files = Array.from(e.target.files || []).filter((f) => f.type.startsWith('image/'));
+    e.target.value = '';
+    if (files.length === 0) {
+      showToast('⚠️ Please choose an image file (PNG or JPG)');
+      return;
+    }
+    try {
+      const loaded = await Promise.all(files.map(readFile));
+      const items = loaded.map((src, i) => ({
+        id: `custom-${Date.now()}-${i}`,
+        name: files[i].name.replace(/\.[^.]+$/, ''),
+        src,
+        type: 'image',
+      }));
+      const listKey = kind === 'frame' ? 'customFrames' : 'customBackgrounds';
+      const pickKey = kind === 'frame' ? 'frame' : 'background';
+      update({
+        [listKey]: [...(edit[listKey] || []), ...items],
+        [pickKey]: items[0].id,
+      });
+      showToast(`✅ Design imported — your ${kind === 'frame' ? 'frame' : 'backdrop'} updated!`);
+    } catch {
+      showToast('⚠️ Could not read that file');
+    }
+  };
+
+  const pickLayout = (layoutId) => update({ layout: layoutId });
+
+  const removeDesign = (kind, id) => {
+    const listKey = kind === 'frame' ? 'customFrames' : 'customBackgrounds';
+    const pickKey = kind === 'frame' ? 'frame' : 'background';
+    const fallback = kind === 'frame' ? 'white' : 'cream';
+    const patch = { [listKey]: (edit[listKey] || []).filter((it) => it.id !== id) };
+    if (edit[pickKey] === id) patch[pickKey] = fallback;
+    update(patch);
+  };
 
   // --- Sticker add / drag / delete ---
   const addSticker = (emoji) => {
@@ -104,6 +219,12 @@ const EditView = ({ photos, edit, setEdit, onSave, onBack }) => {
     };
   };
 
+  const canvasPx = (e) => {
+    const canvas = canvasRef.current;
+    const p = canvasPos(e);
+    return { x: p.x * canvas.width, y: p.y * canvas.height };
+  };
+
   const hitSticker = (pos) => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
@@ -121,11 +242,50 @@ const EditView = ({ photos, edit, setEdit, onSave, onBack }) => {
   const onPointerDown = (e) => {
     const pos = canvasPos(e);
     const hit = hitSticker(pos);
-    if (hit) { setDragging(hit); setSelectedSticker(hit); }
-    else setSelectedSticker(null);
+    if (hit) {
+      setDragging(hit);
+      setSelectedSticker(hit);
+      setSelectedPhoto(null);
+      return;
+    }
+    const px = canvasPx(e);
+    const tile = photoAtPoint(photoPlan(photos, edit), px.x, px.y);
+    if (!tile) {
+      setSelectedPhoto(null);
+      return;
+    }
+    const adj = (edit.photoAdjust || {})[tile.index] || {};
+    const size = imgSizes.current[tile.index];
+    photoDrag.current = {
+      index: tile.index,
+      x: px.x,
+      y: px.y,
+      w: tile.w,
+      h: tile.h,
+      dx: adj.dx || 0,
+      dy: adj.dy || 0,
+      lim: size ? coverCrop(size.w, size.h, tile.w, tile.h, adj).lim : null,
+    };
+    setDraggingPhoto(true);
+    setSelectedPhoto(tile.index);
+    setSelectedSticker(null);
   };
 
   const onPointerMove = (e) => {
+    const drag = photoDrag.current;
+    if (drag) {
+      e.preventDefault();
+      const px = canvasPx(e);
+      const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+      let dx = drag.dx + (px.x - drag.x) / drag.w;
+      let dy = drag.dy + (px.y - drag.y) / drag.h;
+      if (drag.lim) {
+        dx = clamp(dx, -drag.lim.x, drag.lim.x);
+        dy = clamp(dy, -drag.lim.y, drag.lim.y);
+      }
+      updatePhotoAdjust(drag.index, { dx, dy });
+      return;
+    }
     if (!dragging) return;
     e.preventDefault();
     const pos = canvasPos(e);
@@ -136,7 +296,11 @@ const EditView = ({ photos, edit, setEdit, onSave, onBack }) => {
     });
   };
 
-  const onPointerUp = () => setDragging(null);
+  const onPointerUp = () => {
+    photoDrag.current = null;
+    setDragging(null);
+    setDraggingPhoto(false);
+  };
 
   const removeSelectedSticker = () => {
     if (!selectedSticker) return;
@@ -158,7 +322,7 @@ const EditView = ({ photos, edit, setEdit, onSave, onBack }) => {
   return (
     <div className="view-container" style={{ maxWidth: 1180 }}>
       <h2 className="view-title">Decorate your <span className="grad">masterpiece</span></h2>
-      <p className="view-sub">Frames, stickers, backdrops and captions — everything updates live.</p>
+      <p className="view-sub">Frames, stickers, backdrops and captions — everything updates live. Tap a photo to slide or zoom it inside its frame.</p>
 
       <div className="editor-wrap">
         {/* Live preview */}
@@ -175,8 +339,27 @@ const EditView = ({ photos, edit, setEdit, onSave, onBack }) => {
               onTouchStart={onPointerDown}
               onTouchMove={onPointerMove}
               onTouchEnd={onPointerUp}
-              style={{ cursor: dragging ? 'grabbing' : 'grab', touchAction: 'none' }}
+              style={{ cursor: dragging || draggingPhoto ? 'grabbing' : 'grab', touchAction: 'none' }}
             />
+          )}
+          {activePhoto !== null && (
+            <div className="photo-adjust">
+              <b>Shot {activePhoto + 1}</b>
+              <span className="photo-adjust-hint">Drag the photo to slide it · zoom to see more</span>
+              <div className="photo-adjust-tools">
+                <span>Zoom</span>
+                <input
+                  type="range"
+                  min={MIN_ZOOM}
+                  max={MAX_ZOOM}
+                  step="0.05"
+                  value={(edit.photoAdjust || {})[activePhoto]?.zoom || MIN_ZOOM}
+                  onChange={(e) => updatePhotoAdjust(activePhoto, { zoom: Number(e.target.value) })}
+                />
+                <button className="btn btn-ghost btn-sm" onClick={() => resetPhoto(activePhoto)}>Reset</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => setSelectedPhoto(null)}>Done</button>
+              </div>
+            </div>
           )}
         </div>
 
@@ -210,7 +393,7 @@ const EditView = ({ photos, edit, setEdit, onSave, onBack }) => {
                             key={l.id}
                             className={`filter-chip ${edit.layout === l.id ? 'active' : ''}`}
                             style={{ borderRadius: 12, padding: '12px 8px' }}
-                            onClick={() => update({ layout: l.id })}
+                            onClick={() => pickLayout(l.id)}
                           >
                             {l.name}
                           </button>
@@ -219,12 +402,21 @@ const EditView = ({ photos, edit, setEdit, onSave, onBack }) => {
                     </div>
                   );
                 })}
-                <p className="hint-text">Layouts use your first {LAYOUTS[edit.layout].slots} photo(s). Extra shots stay saved in your gallery.</p>
+                <p className="hint-text">Every template holds all your shots — when there are more photos than frames, the extras tile neatly inside them.</p>
               </>
             )}
 
             {tab === 'frame' && (
               <>
+                <CustomDesignSection
+                  title="Your frame designs"
+                  items={edit.customFrames || []}
+                  selectedId={edit.frame}
+                  onPick={(id) => update({ frame: id })}
+                  onImport={() => frameFileRef.current?.click()}
+                  onRemove={(id) => removeDesign('frame', id)}
+                  hint="Import your own frame art (PNG/JPG). The border of your image becomes the frame."
+                />
                 {FRAME_CATEGORIES.map((cat) => (
                   <SwatchSection
                     key={cat.id}
@@ -234,7 +426,7 @@ const EditView = ({ photos, edit, setEdit, onSave, onBack }) => {
                     onPick={(id) => update({ frame: id })}
                   />
                 ))}
-                <p className="hint-text">Selected: <b>{FRAMES.find((f) => f.id === edit.frame)?.name}</b></p>
+                <p className="hint-text">Selected: <b>{FRAMES.find((f) => f.id === edit.frame)?.name || (edit.customFrames || []).find((f) => f.id === edit.frame)?.name || 'Custom'}</b></p>
 
                 <h5>Caption</h5>
                 <input
@@ -285,6 +477,15 @@ const EditView = ({ photos, edit, setEdit, onSave, onBack }) => {
 
             {tab === 'background' && (
               <>
+                <CustomDesignSection
+                  title="Your backdrops"
+                  items={edit.customBackgrounds || []}
+                  selectedId={edit.background}
+                  onPick={(id) => update({ background: id })}
+                  onImport={() => bgFileRef.current?.click()}
+                  onRemove={(id) => removeDesign('background', id)}
+                  hint="Import your own backdrop image — it fills the canvas behind your photos."
+                />
                 {BACKGROUND_CATEGORIES.map((cat) => (
                   <SwatchSection
                     key={cat.id}
@@ -294,12 +495,16 @@ const EditView = ({ photos, edit, setEdit, onSave, onBack }) => {
                     onPick={(id) => update({ background: id })}
                   />
                 ))}
-                <p className="hint-text">Selected: <b>{BACKGROUNDS.find((b) => b.id === edit.background)?.name}</b></p>
+                <p className="hint-text">Selected: <b>{BACKGROUNDS.find((b) => b.id === edit.background)?.name || (edit.customBackgrounds || []).find((b) => b.id === edit.background)?.name || 'Custom'}</b></p>
               </>
             )}
           </div>
         </div>
       </div>
+
+      <input ref={frameFileRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={importDesign('frame')} />
+      <input ref={bgFileRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={importDesign('background')} />
+      {toast && <div className="share-toast">{toast}</div>}
 
       <div style={{ display: 'flex', gap: 14, marginTop: 26, flexWrap: 'wrap', justifyContent: 'center' }}>
         <button className="btn btn-ghost" onClick={onBack}>← Retake</button>

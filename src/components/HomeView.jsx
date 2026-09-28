@@ -17,6 +17,11 @@ const features = [
     desc: '60+ frames & backdrops organized by color — neon glows, film strips, emoji borders, hearts, confetti, bokeh and 70+ stickers.',
   },
   {
+    icon: '🖨️',
+    title: 'Print & QR Codes',
+    desc: 'Auto-print in 2×6, 4×6, 5×7, A4 or Letter — then let guests scan a QR code to grab the photo on their phone.',
+  },
+  {
     icon: '🚀',
     title: 'Share Instantly',
     desc: 'Download in HD or share straight to friends and couples via the native share sheet.',

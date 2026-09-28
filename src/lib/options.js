@@ -4,10 +4,52 @@
 //  styles they love fast. Rendering lives in compose.js.
 // ============================================================================
 
+// Max shots kept in the booth session (capture + import combined)
+export const MAX_PHOTOS = 8;
+
+// ---------- Print sizes (named CSS pages, see index.css) ----------
+export const PRINT_SIZES = [
+  { id: '2x6', label: 'Booth Strip 2×6″', desc: 'Classic photo strip' },
+  { id: '4x6', label: 'Standard 4×6″', desc: 'Most common print' },
+  { id: '5x7', label: 'Classic 5×7″', desc: 'Portrait favorite' },
+  { id: 'a4', label: 'A4', desc: 'Full sheet 210×297mm' },
+  { id: 'letter', label: 'Letter', desc: 'Full sheet 8.5×11″' },
+];
+
 // ---------- Layout Templates ----------
 // Each layout defines canvas aspect + photo slot rects in relative (0-1) coords.
 // rect: { x, y, w, h } as fractions of canvas width/height.
 // cat: 'strips' | 'grids' | 'singles' | 'wide'
+//
+// Double-strip layouts group their frames inside `groups` — one card per strip,
+// each with optional dark header and a footer caption area. `rects`/`slots` are
+// derived from the groups below so every consumer keeps reading flat slots.
+// Frames are fractions of their own group box; `rot` is degrees, clockwise.
+const stripGroup = ({ x, y, w, h, rot = 0, header = false, perStrip, gap = 0.026, pad = 0.07 }) => {
+  const top = header ? 0.14 : 0.045;
+  const bottom = 0.855;
+  const fh = (bottom - top - gap * (perStrip - 1)) / perStrip;
+  return {
+    x, y, w, h, rot, header,
+    frames: Array.from({ length: perStrip }, (_, i) => ({
+      x: pad, y: top + i * (fh + gap), w: 1 - pad * 2, h: fh,
+    })),
+  };
+};
+
+const groupRects = (groups) => groups.flatMap((g) => g.frames.map((f) => ({
+  x: g.x + f.x * g.w,
+  y: g.y + f.y * g.h,
+  w: f.w * g.w,
+  h: f.h * g.h,
+  rot: g.rot,
+  // The paper card tilts about its own centre, so its frames have to tilt about
+  // that same point — tilting each frame about its own centre splays the photos
+  // out of the strip the further they sit from the middle.
+  px: g.x + g.w / 2,
+  py: g.y + g.h / 2,
+})));
+
 export const LAYOUTS = {
   // ===== Classic Strips =====
   strip3: {
@@ -39,6 +81,39 @@ export const LAYOUTS = {
       { x: 0.066, y: 0.498, w: 0.868, h: 0.143 },
       { x: 0.066, y: 0.657, w: 0.868, h: 0.143 },
       { x: 0.066, y: 0.816, w: 0.868, h: 0.143 },
+    ],
+  },
+  // 6×2 double strips (two prints side by side on one sheet)
+  stripA: {
+    id: 'stripA', name: 'Double Strip A', desc: 'Two 3-pose strips', cat: 'strips',
+    canvas: { w: 1200, h: 1800 }, pad: 40, gap: 26, captionH: 120,
+    groups: [
+      stripGroup({ x: 0.025, y: 0.02, w: 0.46, h: 0.96, perStrip: 3 }),
+      stripGroup({ x: 0.515, y: 0.02, w: 0.46, h: 0.96, perStrip: 3 }),
+    ],
+  },
+  stripB: {
+    id: 'stripB', name: 'Double Strip B', desc: 'Two 3-pose strips + header', cat: 'strips',
+    canvas: { w: 1200, h: 1800 }, pad: 40, gap: 26, captionH: 120,
+    groups: [
+      stripGroup({ x: 0.025, y: 0.02, w: 0.46, h: 0.96, perStrip: 3, header: true }),
+      stripGroup({ x: 0.515, y: 0.02, w: 0.46, h: 0.96, perStrip: 3, header: true }),
+    ],
+  },
+  stripC: {
+    id: 'stripC', name: 'Double Strip C', desc: 'Two 4-pose strips + header', cat: 'strips',
+    canvas: { w: 1200, h: 1800 }, pad: 40, gap: 26, captionH: 120,
+    groups: [
+      stripGroup({ x: 0.025, y: 0.02, w: 0.46, h: 0.96, perStrip: 4, header: true }),
+      stripGroup({ x: 0.515, y: 0.02, w: 0.46, h: 0.96, perStrip: 4, header: true }),
+    ],
+  },
+  stripD: {
+    id: 'stripD', name: 'Double Strip D', desc: 'Fanned twin 4-pose strips', cat: 'strips',
+    canvas: { w: 1300, h: 1800 }, pad: 40, gap: 26, captionH: 120,
+    groups: [
+      stripGroup({ x: 0.065, y: 0.02, w: 0.37, h: 0.96, perStrip: 4, header: true, rot: -4.5 }),
+      stripGroup({ x: 0.565, y: 0.02, w: 0.37, h: 0.96, perStrip: 4, header: true, rot: 4.5 }),
     ],
   },
   // ===== Grids & Collages =====
@@ -119,6 +194,15 @@ export const LAYOUTS = {
     ],
   },
 };
+
+// Group-based layouts carry no literal rects — flatten them so every consumer
+// (compose, previews, tiling) still reads a flat slot list.
+Object.values(LAYOUTS).forEach((l) => {
+  if (l.groups && !l.rects) {
+    l.rects = groupRects(l.groups);
+    l.slots = l.rects.length;
+  }
+});
 
 // Layout picker grouping (order matters)
 export const LAYOUT_CATEGORIES = [
@@ -319,5 +403,8 @@ export const DEFAULT_EDIT = {
   frame: 'white',
   background: 'cream',
   stickers: [], // { id, emoji, x, y, size } in relative coords
+  photoAdjust: {}, // per shot, keyed by index: { dx, dy, zoom } pan/zoom inside its frame
   caption: '',
+  customFrames: [], // user-imported designs: { id, name, src, type: 'image' }
+  customBackgrounds: [], // user-imported designs: { id, name, src, type: 'image' }
 };

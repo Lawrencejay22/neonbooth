@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import HomeView from './components/HomeView';
 import CameraView from './components/CameraView';
 import LayoutView from './components/LayoutView';
 import EditView from './components/EditView';
 import FinalView from './components/FinalView';
 import Gallery from './components/Gallery';
-import { DEFAULT_EDIT } from './lib/options';
+import { DEFAULT_EDIT, MAX_PHOTOS, LAYOUTS } from './lib/options';
 
 const STEPS = [
   { id: 'camera', label: 'Capture', num: 1 },
@@ -28,16 +28,62 @@ function App() {
   const goFinal = () => setCurrentView('final');
 
   const handleCapture = (photoDataUrl) => {
-    setPhotos((prev) => (prev.length >= 6 ? prev : [...prev, photoDataUrl]));
+    setPhotos((prev) => (prev.length >= MAX_PHOTOS ? prev : [...prev, photoDataUrl]));
   };
-  const handleRemove = (index) => setPhotos((prev) => prev.filter((_, i) => i !== index));
-  const handleClearAll = () => setPhotos([]);
+  const handleRemove = (index) => {
+    setPhotos((prev) => prev.filter((_, i) => i !== index));
+    // Shots are numbered, so keep each photo's pan/zoom attached to it when one
+    // is deleted from the middle.
+    setEdit((prev) => {
+      const adj = prev.photoAdjust;
+      if (!adj || Object.keys(adj).length === 0) return prev;
+      const next = {};
+      Object.keys(adj).forEach((k) => {
+        const i = Number(k);
+        if (i > index) next[i - 1] = adj[k];
+        else if (i < index) next[i] = adj[k];
+      });
+      return { ...prev, photoAdjust: next };
+    });
+  };
+  const handleClearAll = () => {
+    setPhotos([]);
+    setEdit((prev) => ({ ...prev, photoAdjust: {} }));
+  };
+
+  const handleImport = (dataUrls) => {
+    const room = Math.max(0, MAX_PHOTOS - photos.length);
+    const added = dataUrls.slice(0, room);
+    if (added.length === 0) return;
+    setPhotos((prev) => [...prev, ...added]);
+    // Fresh import goes straight into the layout, same as a fresh capture.
+    if (photos.length === 0) goEdit();
+  };
 
   const handleSelectLayout = (layoutId) => {
     setEdit((prev) => ({ ...prev, layout: layoutId }));
     if (photos.length > 0) goEdit();
     else goCamera();
   };
+
+  // Auto-move: once the session has enough shots to fill the current layout,
+  // glide into the editor so the photos land inside the layout by themselves.
+  const [autoMoving, setAutoMoving] = useState(false);
+  useEffect(() => {
+    if (currentView !== 'camera' || photos.length === 0) return undefined;
+    const slots = (LAYOUTS[edit.layout] || LAYOUTS.strip3).slots;
+    if (photos.length < slots) return undefined;
+    setAutoMoving(true);
+    const t = setTimeout(() => {
+      setAutoMoving(false);
+      goEdit();
+    }, 1500);
+    return () => {
+      clearTimeout(t);
+      setAutoMoving(false);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photos, currentView, edit.layout]);
 
   const handleStepClick = (stepId) => {
     if (stepId === 'camera') goCamera();
@@ -58,10 +104,18 @@ function App() {
             onNext={goLayout}
             dualMode={dualMode}
             setDualMode={setDualMode}
+            autoMoving={autoMoving}
           />
         );
       case 'layout':
-        return <LayoutView onSelectLayout={handleSelectLayout} currentLayout={edit.layout} />;
+        return (
+          <LayoutView
+            onSelectLayout={handleSelectLayout}
+            currentLayout={edit.layout}
+            onImport={handleImport}
+            photosCount={photos.length}
+          />
+        );
       case 'edit':
         return <EditView photos={photos} edit={edit} setEdit={setEdit} onSave={goFinal} onBack={goCamera} />;
       case 'final':
