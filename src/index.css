@@ -1143,6 +1143,30 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.nudge-pad {
+  display: grid;
+  grid-template-columns: repeat(2, 30px);
+  gap: 4px;
+}
+
+.nudge-pad .btn-sm {
+  padding: 3px 0;
+  font-size: 0.85rem;
+  line-height: 1.2;
+}
+
+.photo-switch {
+  background: #2a2140;
+  color: var(--text);
+  border: 1px solid var(--stroke);
+  border-radius: 9px;
+  padding: 5px 8px;
+  font-size: 0.75rem;
+  cursor: pointer;
 }
 
 .photo-adjust-tools input[type='range'] {

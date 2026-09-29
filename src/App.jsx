@@ -51,6 +51,29 @@ function App() {
     setEdit((prev) => ({ ...prev, photoAdjust: {} }));
   };
 
+  // Two shots trade places in the layout. Each one carries its own pan/zoom
+  // across, so a carefully framed face doesn't come loose when you switch them.
+  const handleSwitchPhotos = (a, b) => {
+    if (a === b) return;
+    setPhotos((prev) => {
+      if (prev[a] === undefined || prev[b] === undefined) return prev;
+      const next = [...prev];
+      next[a] = prev[b];
+      next[b] = prev[a];
+      return next;
+    });
+    setEdit((prev) => {
+      const adj = prev.photoAdjust;
+      if (!adj || (!adj[a] && !adj[b])) return prev;
+      const next = { ...adj };
+      if (adj[b]) next[a] = adj[b];
+      else delete next[a];
+      if (adj[a]) next[b] = adj[a];
+      else delete next[b];
+      return { ...prev, photoAdjust: next };
+    });
+  };
+
   const handleImport = (dataUrls) => {
     const room = Math.max(0, MAX_PHOTOS - photos.length);
     const added = dataUrls.slice(0, room);
@@ -117,7 +140,7 @@ function App() {
           />
         );
       case 'edit':
-        return <EditView photos={photos} edit={edit} setEdit={setEdit} onSave={goFinal} onBack={goCamera} />;
+        return <EditView photos={photos} edit={edit} setEdit={setEdit} onSave={goFinal} onBack={goCamera} onSwitchPhotos={handleSwitchPhotos} />;
       case 'final':
         return <FinalView photos={photos} edit={edit} onDone={goHome} onEdit={goEdit} />;
       default:

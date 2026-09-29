@@ -96,7 +96,7 @@ const CustomDesignSection = ({ title, items, selectedId, onPick, onImport, onRem
   </div>
 );
 
-const EditView = ({ photos, edit, setEdit, onSave, onBack }) => {
+const EditView = ({ photos, edit, setEdit, onSave, onBack, onSwitchPhotos }) => {
   const canvasRef = useRef(null);
   const stageRef = useRef(null);
   const frameFileRef = useRef(null);
@@ -142,6 +142,43 @@ const EditView = ({ photos, edit, setEdit, onSave, onBack }) => {
     delete next[index];
     return { ...prev, photoAdjust: next };
   });
+
+  // The frame a shot is actually drawn in, so the arrow buttons can slide it
+  // against the same limits the drag gesture uses.
+  const tileOf = (index) => {
+    let found = null;
+    photoPlan(photos, edit).slots.forEach((s) => {
+      s.tiles.forEach((t) => { if (!found && t.index === index) found = t; });
+    });
+    return found;
+  };
+
+  const NUDGE = 0.05;
+  const nudgePhoto = (axis, delta) => {
+    if (activePhoto === null) return;
+    const tile = tileOf(activePhoto);
+    if (!tile) return;
+    const size = imgSizes.current[activePhoto];
+    setEdit((prev) => {
+      const cur = (prev.photoAdjust || {})[activePhoto] || {};
+      // coverCrop reports its limits as { x, y } while the stored keys are dx/dy.
+      const limKey = axis === 'dx' ? 'x' : 'y';
+      const max = size ? coverCrop(size.w, size.h, tile.w, tile.h, cur).lim[limKey] : 1;
+      const v = Math.min(max, Math.max(-max, (cur[axis] || 0) + delta));
+      return { ...prev, photoAdjust: { ...prev.photoAdjust, [activePhoto]: { ...cur, [axis]: v } } };
+    });
+  };
+
+  // How far the selected shot can still slide on each axis. A frame wider than
+  // the photo has no horizontal room at all, so those arrows say so instead of
+  // looking broken.
+  const slideRoom = (() => {
+    if (activePhoto === null) return { x: 0, y: 0 };
+    const tile = tileOf(activePhoto);
+    const size = imgSizes.current[activePhoto];
+    if (!tile || !size) return { x: 1, y: 1 };
+    return coverCrop(size.w, size.h, tile.w, tile.h, (edit.photoAdjust || {})[activePhoto] || {}).lim;
+  })();
 
   const showToast = (msg) => {
     setToast(msg);
@@ -345,8 +382,15 @@ const EditView = ({ photos, edit, setEdit, onSave, onBack }) => {
           {activePhoto !== null && (
             <div className="photo-adjust">
               <b>Shot {activePhoto + 1}</b>
-              <span className="photo-adjust-hint">Drag the photo to slide it · zoom to see more</span>
+              <span className="photo-adjust-hint">Drag or use the arrows to slide it · Switch place to trade shots</span>
               <div className="photo-adjust-tools">
+                <span>Slide</span>
+                <span className="nudge-pad">
+                  <button className="btn btn-ghost btn-sm" onClick={() => nudgePhoto('dy', -NUDGE)} disabled={slideRoom.y <= 0} title={slideRoom.y <= 0 ? 'This frame already shows the full height' : 'Slide up'}>↑</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => nudgePhoto('dx', -NUDGE)} disabled={slideRoom.x <= 0} title={slideRoom.x <= 0 ? 'This frame already shows the full width' : 'Slide left'}>←</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => nudgePhoto('dy', NUDGE)} disabled={slideRoom.y <= 0} title={slideRoom.y <= 0 ? 'This frame already shows the full height' : 'Slide down'}>↓</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => nudgePhoto('dx', NUDGE)} disabled={slideRoom.x <= 0} title={slideRoom.x <= 0 ? 'This frame already shows the full width' : 'Slide right'}>→</button>
+                </span>
                 <span>Zoom</span>
                 <input
                   type="range"
@@ -356,6 +400,18 @@ const EditView = ({ photos, edit, setEdit, onSave, onBack }) => {
                   value={(edit.photoAdjust || {})[activePhoto]?.zoom || MIN_ZOOM}
                   onChange={(e) => updatePhotoAdjust(activePhoto, { zoom: Number(e.target.value) })}
                 />
+                {photos.length > 1 && (
+                  <select
+                    className="photo-switch"
+                    value=""
+                    onChange={(e) => { if (e.target.value !== '') onSwitchPhotos(activePhoto, Number(e.target.value)); }}
+                  >
+                    <option value="">Switch place…</option>
+                    {photos.map((_, i) => (
+                      <option key={i} value={i} disabled={i === activePhoto}>with Shot {i + 1}</option>
+                    ))}
+                  </select>
+                )}
                 <button className="btn btn-ghost btn-sm" onClick={() => resetPhoto(activePhoto)}>Reset</button>
                 <button className="btn btn-ghost btn-sm" onClick={() => setSelectedPhoto(null)}>Done</button>
               </div>
